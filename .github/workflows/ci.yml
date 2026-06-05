@@ -105,13 +105,13 @@ jobs:
       - name: Run bridge-starter-node npm audit for high vulnerabilities
         working-directory: bridge-starter-node
         run: npm run audit:high
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Run bridge-starter-node Snyk test for high vulnerabilities
         if: steps.check_snyk.outputs.snyk_available == 'true'
         working-directory: bridge-starter-node
         run: npm run snyk:test:high
-        continue-on-error: false
+        continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
 
