@@ -14,6 +14,7 @@ import { WhatsappService } from "../services/whatsapp";
 import { notifyTransactionWebhook, WebhookService } from "../services/webhook";
 import { pushNotificationService } from "../services/push";
 import { capturePersistentFailure } from "./dlq";
+import { isBlacklisted } from "../middleware/ipBlacklist";
 const transactionModel = new TransactionModel();
 const mobileMoneyService = new MobileMoneyService();
 const stellarService = new StellarService();
@@ -131,7 +132,35 @@ async function processTransaction(data: TransactionJobData): Promise<Transaction
     phoneNumber,
     provider,
     stellarAddress,
+    clientIp,
   } = data;
+
+  // ── IP Blacklist check ──────────────────────────────────────────────────────
+  // Reject jobs whose originating IP is blacklisted before any provider I/O.
+  if (clientIp) {
+    const blocked = await isBlacklisted(clientIp);
+    if (blocked) {
+      console.warn(
+        `[ipBlacklist] Worker rejected job ${transactionId} — originating IP is blacklisted: ${clientIp}`,
+      );
+      await transactionModel.updateStatus(transactionId, TransactionStatus.Failed);
+      await notifyTransactionWebhook(transactionId, "transaction.failed", {
+        transactionModel,
+        webhookService,
+      });
+      await rabbitMQManager.publish(EXCHANGES.TRANSACTIONS, ROUTING_KEYS.TRANSACTION_FAILED, {
+        transactionId,
+        status: "failed",
+        error: "Request originated from a blacklisted IP address",
+      });
+      return {
+        success: false,
+        transactionId,
+        error: "Request originated from a blacklisted IP address",
+      };
+    }
+  }
+  // ───────────────────────────────────────────────────────────────────────────
 
   console.log(`[RabbitMQ] Processing ${type} transaction: ${transactionId}`);
 

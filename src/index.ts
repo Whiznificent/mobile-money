@@ -72,6 +72,7 @@ import { createSep10Router } from "./stellar/sep10";
 import tomlRouter from "./routes/toml";
 import feesRouter from "./routes/fees";
 import feeStrategiesRouter from "./routes/feeStrategies";
+import { ipBlacklistMiddleware } from "./middleware/ipBlacklist";
 
 // 1. Import Sentry Middleware
 import { initSentry, sentryBreadcrumbMiddleware } from "./middleware/sentry";
@@ -153,6 +154,9 @@ app.use(
 app.use(responseTime);
 app.use(requestId);
 app.use(i18nMiddleware);
+// Block requests from blacklisted IPs as early as possible — before any
+// business logic, session handling, or route matching.
+app.use(ipBlacklistMiddleware);
 
 app.use((req: Request, res: Response, next: NextFunction) => {
   if (isShuttingDown) {
